@@ -31,7 +31,7 @@ func BPF(cmd Cmd, attr unsafe.Pointer, size uintptr) (uintptr, error) {
 	}
 
 	for {
-		r1, _, errNo := unix.Syscall(unix.SYS_BPF, uintptr(cmd), uintptr(attr), size)
+		r1, errNo := bpfSyscall(cmd, attr, size)
 		runtime.KeepAlive(attr)
 
 		// As of ~4.20 the verifier can be interrupted by a signal,

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/internal"
 	"github.com/cilium/ebpf/internal/kallsyms"
@@ -92,6 +93,36 @@ func copyMapOfSpecs[T interface{ Copy() T }](m map[string]T) map[string]T {
 	}
 
 	return cpy
+}
+
+// RewriteMaps replaces all references to specific maps.
+//
+// Deprecated: Pass CollectionOptions.MapReplacements when loading the
+// Collection instead. This compatibility wrapper is kept for downstream
+// corpus apps which still call the v0.20 API.
+func (cs *CollectionSpec) RewriteMaps(maps map[string]*Map) error {
+	for symbol, m := range maps {
+		seen := false
+		for progName, progSpec := range cs.Programs {
+			err := progSpec.Instructions.AssociateMap(symbol, m)
+
+			switch {
+			case err == nil:
+				seen = true
+			case errors.Is(err, asm.ErrUnreferencedSymbol):
+			default:
+				return fmt.Errorf("program %s: %w", progName, err)
+			}
+		}
+
+		if !seen {
+			return fmt.Errorf("map %s not referenced by any programs", symbol)
+		}
+
+		delete(cs.Maps, symbol)
+	}
+
+	return nil
 }
 
 // Assign the contents of a CollectionSpec to a struct.
